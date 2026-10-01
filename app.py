@@ -1,4 +1,3 @@
-```python
 import os
 import re
 
@@ -817,4 +816,4 @@ if st.session_state.vector_store is None:
     st.info(
         "💡 Upload a PDF above to start building your knowledge base."
     )
-```
+
