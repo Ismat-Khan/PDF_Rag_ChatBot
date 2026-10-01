@@ -1,13 +1,13 @@
+```python
 import os
 import re
-import tempfile
 
 import faiss
 import numpy as np
 import streamlit as st
+from groq import Groq
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-from groq import Groq
 
 
 # ============================================================
@@ -29,66 +29,49 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        .main {
-            background-color: #f8fafc;
-        }
 
-        .block-container {
-            padding-top: 2rem;
-            padding-bottom: 3rem;
-            max-width: 1200px;
-        }
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1200px;
+    }
 
-        .hero {
-            padding: 2rem;
-            border-radius: 20px;
-            background: linear-gradient(
-                135deg,
-                #0f172a,
-                #1e293b
-            );
-            color: white;
-            margin-bottom: 2rem;
-        }
+    .hero {
+        padding: 2rem;
+        border-radius: 20px;
+        background: linear-gradient(
+            135deg,
+            #0f172a,
+            #1e293b
+        );
+        color: white;
+        margin-bottom: 2rem;
+    }
 
-        .hero h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
+    .hero h1 {
+        color: white;
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
 
-        .hero p {
-            color: #cbd5e1;
-            font-size: 1.05rem;
-        }
+    .hero p {
+        color: #cbd5e1;
+        font-size: 1.05rem;
+        margin-bottom: 0;
+    }
 
-        .info-card {
-            padding: 1.2rem;
-            border-radius: 16px;
-            background-color: white;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 1rem;
-        }
+    .source-box {
+        padding: 1rem;
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.08);
+        border-left: 4px solid #6366f1;
+        margin-bottom: 0.8rem;
+    }
 
-        .source-card {
-            padding: 1rem;
-            border-radius: 12px;
-            background-color: #f1f5f9;
-            border-left: 4px solid #6366f1;
-            margin-bottom: 0.8rem;
-        }
+    .source-box p {
+        margin: 0.3rem 0;
+    }
 
-        .metric-card {
-            padding: 1rem;
-            border-radius: 14px;
-            background-color: white;
-            border: 1px solid #e2e8f0;
-            text-align: center;
-        }
-
-        .small-text {
-            color: #64748b;
-            font-size: 0.9rem;
-        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -104,8 +87,8 @@ st.markdown(
     <div class="hero">
         <h1>📚 PDF RAG Assistant</h1>
         <p>
-            Upload a PDF, build a FAISS knowledge base, and ask questions
-            using retrieval-augmented generation.
+            Upload a PDF, build a FAISS knowledge base,
+            and ask questions using Retrieval-Augmented Generation.
         </p>
     </div>
     """,
@@ -136,12 +119,6 @@ if "messages" not in st.session_state:
 
 @st.cache_resource
 def load_embedding_model():
-    """
-    Loads an open-source embedding model.
-
-    The model runs locally on the Streamlit server.
-    No embedding API key is required.
-    """
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
@@ -153,6 +130,7 @@ embedding_model = load_embedding_model()
 # ============================================================
 
 def get_groq_client():
+
     api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
@@ -166,18 +144,17 @@ def get_groq_client():
 # ============================================================
 
 def extract_pdf_text(uploaded_file):
-    """
-    Extracts text from every page of the uploaded PDF.
-    """
 
     reader = PdfReader(uploaded_file)
 
     pages = []
 
     for page_number, page in enumerate(reader.pages, start=1):
+
         text = page.extract_text() or ""
 
         if text.strip():
+
             pages.append(
                 {
                     "page": page_number,
@@ -193,11 +170,9 @@ def extract_pdf_text(uploaded_file):
 # ============================================================
 
 def clean_text(text):
-    """
-    Cleans unnecessary whitespace from extracted PDF text.
-    """
 
     text = re.sub(r"\s+", " ", text)
+
     return text.strip()
 
 
@@ -205,18 +180,21 @@ def clean_text(text):
 # TEXT CHUNKING
 # ============================================================
 
-def create_chunks(pages, chunk_size=1000, chunk_overlap=200):
-    """
-    Creates overlapping text chunks.
-
-    Each chunk keeps its original PDF page number.
-    """
+def create_chunks(
+    pages,
+    chunk_size=1000,
+    chunk_overlap=200,
+):
 
     chunks = []
 
     for page_data in pages:
+
         page_number = page_data["page"]
-        text = clean_text(page_data["text"])
+
+        text = clean_text(
+            page_data["text"]
+        )
 
         if not text:
             continue
@@ -224,11 +202,13 @@ def create_chunks(pages, chunk_size=1000, chunk_overlap=200):
         start = 0
 
         while start < len(text):
+
             end = start + chunk_size
 
             chunk_text = text[start:end].strip()
 
             if chunk_text:
+
                 chunks.append(
                     {
                         "text": chunk_text,
@@ -245,15 +225,15 @@ def create_chunks(pages, chunk_size=1000, chunk_overlap=200):
 
 
 # ============================================================
-# CREATE FAISS VECTOR DATABASE
+# CREATE FAISS VECTOR STORE
 # ============================================================
 
 def create_vector_store(chunks):
-    """
-    Converts chunks into embeddings and stores them in FAISS.
-    """
 
-    texts = [chunk["text"] for chunk in chunks]
+    texts = [
+        chunk["text"]
+        for chunk in chunks
+    ]
 
     embeddings = embedding_model.encode(
         texts,
@@ -262,11 +242,15 @@ def create_vector_store(chunks):
         show_progress_bar=False,
     )
 
-    embeddings = embeddings.astype("float32")
+    embeddings = embeddings.astype(
+        "float32"
+    )
 
     dimension = embeddings.shape[1]
 
-    index = faiss.IndexFlatIP(dimension)
+    index = faiss.IndexFlatIP(
+        dimension
+    )
 
     index.add(embeddings)
 
@@ -277,11 +261,12 @@ def create_vector_store(chunks):
 # RETRIEVE RELEVANT CHUNKS
 # ============================================================
 
-def retrieve_chunks(question, index, chunks, top_k=5):
-    """
-    Converts the question into an embedding and retrieves
-    the most relevant chunks from FAISS.
-    """
+def retrieve_chunks(
+    question,
+    index,
+    chunks,
+    top_k=5,
+):
 
     question_embedding = embedding_model.encode(
         [question],
@@ -289,7 +274,9 @@ def retrieve_chunks(question, index, chunks, top_k=5):
         normalize_embeddings=True,
     )
 
-    question_embedding = question_embedding.astype("float32")
+    question_embedding = question_embedding.astype(
+        "float32"
+    )
 
     scores, indices = index.search(
         question_embedding,
@@ -298,7 +285,10 @@ def retrieve_chunks(question, index, chunks, top_k=5):
 
     retrieved_chunks = []
 
-    for score, index_position in zip(scores[0], indices[0]):
+    for score, index_position in zip(
+        scores[0],
+        indices[0],
+    ):
 
         if index_position == -1:
             continue
@@ -318,14 +308,15 @@ def retrieve_chunks(question, index, chunks, top_k=5):
 # GENERATE ANSWER
 # ============================================================
 
-def generate_answer(question, retrieved_chunks):
-    """
-    Sends the retrieved context to the Groq model.
-    """
+def generate_answer(
+    question,
+    retrieved_chunks,
+):
 
     client = get_groq_client()
 
     if client is None:
+
         raise ValueError(
             "GROQ_API_KEY is not configured."
         )
@@ -333,11 +324,15 @@ def generate_answer(question, retrieved_chunks):
     context_parts = []
 
     for item in retrieved_chunks:
+
         context_parts.append(
-            f"[Page {item['page']}]\n{item['text']}"
+            f"[Page {item['page']}]\n"
+            f"{item['text']}"
         )
 
-    context = "\n\n".join(context_parts)
+    context = "\n\n".join(
+        context_parts
+    )
 
     system_prompt = """
 You are a helpful PDF question-answering assistant.
@@ -346,6 +341,7 @@ Answer the user's question using ONLY the information
 provided in the retrieved PDF context.
 
 Rules:
+
 1. Do not invent information.
 2. If the answer is not present in the context, clearly say:
    "I could not find the answer in the uploaded document."
@@ -367,7 +363,9 @@ Answer the question based only on the retrieved context.
 """
 
     response = client.chat.completions.create(
+
         model="openai/gpt-oss-120b",
+
         messages=[
             {
                 "role": "system",
@@ -378,6 +376,7 @@ Answer the question based only on the retrieved context.
                 "content": user_prompt,
             },
         ],
+
         temperature=0.2,
     )
 
@@ -393,11 +392,10 @@ with st.sidebar:
     st.header("⚙️ RAG Settings")
 
     top_k = st.slider(
-        "Number of retrieved chunks",
+        "Retrieved chunks",
         min_value=1,
         max_value=10,
         value=5,
-        help="More chunks provide more context but may increase the prompt size.",
     )
 
     chunk_size = st.slider(
@@ -418,21 +416,32 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("🔑 API Key")
+    st.subheader("🔑 API Status")
 
     if os.getenv("GROQ_API_KEY"):
-        st.success("Groq API key detected.")
+
+        st.success(
+            "Groq API key detected."
+        )
+
     else:
+
         st.warning(
-            "Groq API key not detected. Add GROQ_API_KEY to Streamlit Secrets."
+            "GROQ_API_KEY not detected."
         )
 
     st.divider()
 
     st.caption(
-        "Embeddings: all-MiniLM-L6-v2\n\n"
-        "Vector DB: FAISS\n\n"
-        "LLM: openai/gpt-oss-120b via Groq"
+        "Embedding model: all-MiniLM-L6-v2"
+    )
+
+    st.caption(
+        "Vector database: FAISS"
+    )
+
+    st.caption(
+        "LLM: openai/gpt-oss-120b"
     )
 
 
@@ -440,7 +449,7 @@ with st.sidebar:
 # PDF UPLOAD
 # ============================================================
 
-st.subheader("📄 1. Upload your PDF")
+st.subheader("📄 Upload Your PDF")
 
 uploaded_file = st.file_uploader(
     "Choose a PDF document",
@@ -454,18 +463,23 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    if st.session_state.pdf_name != uploaded_file.name:
+    if (
+        st.session_state.pdf_name
+        != uploaded_file.name
+    ):
 
         st.session_state.vector_store = None
         st.session_state.chunks = []
         st.session_state.messages = []
-        st.session_state.pdf_name = uploaded_file.name
+        st.session_state.pdf_name = (
+            uploaded_file.name
+        )
+
+    st.info(
+        f"Selected document: {uploaded_file.name}"
+    )
 
     if st.session_state.vector_store is None:
-
-        st.info(
-            "Your PDF is ready. Click the button below to build the knowledge base."
-        )
 
         if st.button(
             "🚀 Process PDF",
@@ -476,26 +490,35 @@ if uploaded_file is not None:
             try:
 
                 with st.status(
-                    "Building your RAG knowledge base...",
+                    "Building RAG knowledge base...",
                     expanded=True,
                 ):
 
-                    st.write("📖 Extracting PDF text...")
+                    st.write(
+                        "📖 Extracting PDF text..."
+                    )
 
-                    pages = extract_pdf_text(uploaded_file)
+                    pages = extract_pdf_text(
+                        uploaded_file
+                    )
 
                     if not pages:
+
                         st.error(
-                            "No readable text was found in this PDF. "
-                            "If it is a scanned PDF, OCR may be required."
+                            "No readable text was found "
+                            "in this PDF."
                         )
+
                         st.stop()
 
                     st.write(
-                        f"✅ Extracted text from {len(pages)} page(s)."
+                        f"✅ Extracted text from "
+                        f"{len(pages)} page(s)."
                     )
 
-                    st.write("✂️ Creating text chunks...")
+                    st.write(
+                        "✂️ Creating text chunks..."
+                    )
 
                     chunks = create_chunks(
                         pages,
@@ -504,9 +527,11 @@ if uploaded_file is not None:
                     )
 
                     if not chunks:
+
                         st.error(
-                            "No text chunks could be created."
+                            "No text chunks were created."
                         )
+
                         st.stop()
 
                     st.write(
@@ -517,14 +542,19 @@ if uploaded_file is not None:
                         "🧠 Creating embeddings..."
                     )
 
-                    index = create_vector_store(chunks)
+                    index = create_vector_store(
+                        chunks
+                    )
 
                     st.write(
-                        "✅ Embeddings created and stored in FAISS."
+                        "✅ Embeddings stored in FAISS."
                     )
 
                     st.session_state.chunks = chunks
-                    st.session_state.vector_store = index
+
+                    st.session_state.vector_store = (
+                        index
+                    )
 
                     st.success(
                         "🎉 PDF processed successfully!"
@@ -538,7 +568,7 @@ if uploaded_file is not None:
 
 
 # ============================================================
-# KNOWLEDGE BASE INFORMATION
+# KNOWLEDGE BASE
 # ============================================================
 
 if st.session_state.vector_store is not None:
@@ -550,88 +580,92 @@ if st.session_state.vector_store is not None:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <h3>{len(st.session_state.chunks)}</h3>
-                <div class="small-text">Text Chunks</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+
+        st.metric(
+            label="Text Chunks",
+            value=len(
+                st.session_state.chunks
+            ),
         )
 
     with col2:
+
         pages_count = len(
             set(
                 chunk["page"]
-                for chunk in st.session_state.chunks
+                for chunk in
+                st.session_state.chunks
             )
         )
 
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <h3>{pages_count}</h3>
-                <div class="small-text">Pages</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.metric(
+            label="Pages",
+            value=pages_count,
         )
 
     with col3:
-        st.markdown(
-            """
-            <div class="metric-card">
-                <h3>FAISS</h3>
-                <div class="small-text">Vector Database</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+
+        st.metric(
+            label="Vector Database",
+            value="FAISS",
         )
 
 
 # ============================================================
-# CHAT SECTION
+# CHAT
 # ============================================================
 
 if st.session_state.vector_store is not None:
 
     st.divider()
 
-    st.subheader("💬 2. Ask Questions")
+    st.subheader("💬 Ask Questions")
 
     st.caption(
-        f"Currently searching: {st.session_state.pdf_name}"
+        f"Searching inside: "
+        f"{st.session_state.pdf_name}"
     )
+
+    # Display previous messages
 
     for message in st.session_state.messages:
 
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        with st.chat_message(
+            message["role"]
+        ):
+
+            st.markdown(
+                message["content"]
+            )
 
             if (
-                message["role"] == "assistant"
+                message["role"]
+                == "assistant"
                 and "sources" in message
             ):
 
-                with st.expander("📚 View retrieved sources"):
+                with st.expander(
+                    "📚 View Retrieved Sources"
+                ):
 
-                    for source in message["sources"]:
+                    for source in message[
+                        "sources"
+                    ]:
 
                         st.markdown(
-                            f"""
-                            <div class="source-card">
-                                <b>Page {source["page"]}</b>
-                                <br>
-                                <span class="small-text">
-                                    Similarity: {source["score"]:.3f}
-                                </span>
-                                <br><br>
-                                {source["text"]}
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
+                            f"**Page {source['page']}**"
                         )
+
+                        st.caption(
+                            f"Similarity: "
+                            f"{source['score']:.3f}"
+                        )
+
+                        st.write(
+                            source["text"]
+                        )
+
+                        st.divider()
 
     question = st.chat_input(
         "Ask something about your PDF..."
@@ -647,9 +681,12 @@ if st.session_state.vector_store is not None:
         )
 
         with st.chat_message("user"):
+
             st.markdown(question)
 
-        with st.chat_message("assistant"):
+        with st.chat_message(
+            "assistant"
+        ):
 
             try:
 
@@ -657,11 +694,13 @@ if st.session_state.vector_store is not None:
                     "🔎 Searching the document..."
                 ):
 
-                    retrieved_chunks = retrieve_chunks(
-                        question,
-                        st.session_state.vector_store,
-                        st.session_state.chunks,
-                        top_k=top_k,
+                    retrieved_chunks = (
+                        retrieve_chunks(
+                            question,
+                            st.session_state.vector_store,
+                            st.session_state.chunks,
+                            top_k=top_k,
+                        )
                     )
 
                 with st.spinner(
@@ -684,31 +723,35 @@ if st.session_state.vector_store is not None:
                 )
 
                 with st.expander(
-                    "📚 View retrieved sources"
+                    "📚 View Retrieved Sources"
                 ):
 
                     for source in retrieved_chunks:
 
                         st.markdown(
-                            f"""
-                            <div class="source-card">
-                                <b>Page {source["page"]}</b>
-                                <br>
-                                <span class="small-text">
-                                    Similarity: {source["score"]:.3f}
-                                </span>
-                                <br><br>
-                                {source["text"]}
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
+                            f"**Page {source['page']}**"
                         )
+
+                        st.caption(
+                            f"Similarity: "
+                            f"{source['score']:.3f}"
+                        )
+
+                        st.write(
+                            source["text"]
+                        )
+
+                        st.divider()
 
             except Exception as e:
 
-                error_message = f"Error: {str(e)}"
+                error_message = (
+                    f"Error: {str(e)}"
+                )
 
-                st.error(error_message)
+                st.error(
+                    error_message
+                )
 
                 st.session_state.messages.append(
                     {
@@ -719,44 +762,59 @@ if st.session_state.vector_store is not None:
 
 
 # ============================================================
-# EMPTY STATE
+# HOW IT WORKS
 # ============================================================
 
-else:
+if st.session_state.vector_store is None:
 
-    st.markdown(
-        """
-        <div class="info-card">
-            <h3>🚀 How it works</h3>
+    st.divider()
 
-            <p>
-                <b>1. Upload</b> your PDF document.
-            </p>
+    st.subheader("🔄 How It Works")
 
-            <p>
-                <b>2. Extract</b> the document text.
-            </p>
+    step1, step2 = st.columns(2)
 
-            <p>
-                <b>3. Chunk</b> the text into smaller pieces.
-            </p>
+    with step1:
 
-            <p>
-                <b>4. Embed</b> each chunk using an open-source embedding model.
-            </p>
+        st.markdown(
+            """
+            **1. 📤 Upload**
 
-            <p>
-                <b>5. Store</b> the embeddings inside FAISS.
-            </p>
+            Upload your PDF document.
 
-            <p>
-                <b>6. Retrieve</b> the most relevant chunks for your question.
-            </p>
+            **2. 📖 Extract**
 
-            <p>
-                <b>7. Generate</b> an answer using the Groq-hosted LLM.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+            Extract readable text from the PDF.
+
+            **3. ✂️ Chunk**
+
+            Split the extracted text into smaller pieces.
+
+            **4. 🧠 Embed**
+
+            Convert each chunk into a vector embedding.
+            """
+        )
+
+    with step2:
+
+        st.markdown(
+            """
+            **5. 🗂️ Store**
+
+            Store embeddings inside the FAISS vector database.
+
+            **6. 🔎 Retrieve**
+
+            Find the most relevant chunks for your question.
+
+            **7. 🤖 Generate**
+
+            Send the retrieved context to the Groq-hosted LLM
+            and generate the final answer.
+            """
+        )
+
+    st.info(
+        "💡 Upload a PDF above to start building your knowledge base."
     )
+```
